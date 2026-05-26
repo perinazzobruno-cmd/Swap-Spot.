@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <title>Swap Spot: Trade, Save, Repeat!</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css">
+    <style>
+        body { padding-top: 60px; background: #f8f9fa; }
+        .card-img-top { object-fit: cover; height: 200px; }
+        .wizard-step { display: none; }
+        .wizard-step.active { display: block; }
+    </style>
+</head>
+<body>
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary fixed-top">
+    <a class="navbar-brand" href="{{ url_for('home') }}">Swap Spot: Trade, Save, Repeat!</a>
+    <div class="ml-auto text-white">
+        {% if user %}
+            <span>{{ user.phone }} - 💰 {{ user.saldo }} Coins</span> | 
+            <strong>💰 {{ user.saldo }} Coins</strong> | 
+            <a href="{{ url_for('logout') }}" class="text-white">Logout</a>
+        {% else %}
+            <a href="{{ url_for('login') }}" class="text-white">Login</a>
+        {% endif %}
+    </div>
+</nav>
+<div class="container">
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        <div class="alert alert-info mt-3">
+          {% for msg in messages %}{{ msg }}<br>{% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <div class="row">
+        <div class="col-md-8">
+            <h3 class="mb-3">Available Listings</h3>
+            <div class="row">
+                {% for item in items %}
+                <div class="col-md-6 mb-4">
+                    <div class="card h-100">
+                        <img src="{{ item.photo }}" class="card-img-top" alt="{{ item.title }}" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22100%22 height=%22100%22%3E%3Crect fill=%22%23ddd%22 width=%22100%22 height=%22100%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 dy=%22.3em%22 fill=%22%23999%22%3EImage%3C/text%3E%3C/svg%3E'">
+                        <div class="card-body d-flex flex-column">
+                            <h5 class="card-title">{{ item.title }}</h5>
+                            <p class="card-text">{{ item.description }}</p>
+                            <p class="card-text font-weight-bold">Price: {{ item.price }} Coins</p>
+                            <p class="card-text text-muted">Seller: {{ item.seller }}</p>
+                            <p class="card-text">Photo: <a href="{{ item.photo }}" target="_blank" rel="noopener noreferrer">View Image</a></p>
+                            {% if user and user.phone == item.seller %}
+                            <div class="btn-group btn-block" role="group">
+                                <form action="{{ url_for('delete_item', item_id=item.id) }}" method="post" style="flex: 1;">
+                                    <button type="submit" class="btn btn-danger btn-block">Remove</button>
+                                </form>
+                            </div>
+                            {% elif user and user.phone != item.seller %}
+
+                            <form action="{{ url_for('buy', item_id=item.id) }}" method="post" class="mt-auto"
+                                onsubmit="return confirm('Você possui {{ user.saldo }} Coins.\n\nDeseja comprar este item por {{ item.price }} Coins?');">
+                                <button type="submit" class="btn btn-success btn-block">
+                                    Buy
+                                </button>
+                            </form>
+                            <form action="{{ url_for('buy', item_id=item.id) }}" method="post" class="mt-auto"
+                                  onsubmit="return confirm('Você quer comprar este item por {{ item.price }} Coins?\n\nSeu saldo atual: {{ user.saldo }} Coins');">     
+                               <button type="submit" class="btn btn-success btn-block">Buy</button>
+                          </form>
+                            {% if my_items %}
+                            <form action="{{ url_for('request_trade', item_id=item.id) }}" method="post" class="mt-2">
+                                <div class="form-group mb-2">
+                                    <select name="offered_item_id" class="form-control" required>
+                                        <option value="">Offer one of your items in swap</option>
+                                        {% for my_item in my_items %}
+                                        <option value="{{ my_item.id }}">{{ my_item.title }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <button type="submit" class="btn btn-outline-secondary btn-block">Request Swap</button>
+                            </form>
+                            {% else %}
+                            <button class="btn btn-outline-secondary btn-block mt-2" disabled>Post an item first to offer in swap</button>
+                            {% endif %}
+                            {% else %}
+                            <button class="btn btn-success btn-block" disabled>Login to buy</button>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <div class="col-12">
+                    <div class="alert alert-secondary">No items available right now.</div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        <div class="col-md-4">
+            <h4 class="mb-3">Post Item</h4>
+            <button class="btn btn-primary btn-block mb-3" data-toggle="modal" data-target="#publishModal">🎯 Start Publishing</button>
+
+            {% if user %}
+            <hr>
+            <h4 class="mb-3">Received Swap Requests</h4>
+            {% if trade_requests %}
+            <div class="list-group">
+                {% for trade in trade_requests %}
+                <div class="list-group-item">
+                    <strong>{{ trade.buyer }}</strong> wants to swap <em>{{ trade.requested_title }}</em>
+                    for <em>{{ trade.offered_title }}</em>.
+                    <div class="mt-2">
+                        <form action="{{ url_for('accept_trade', trade_id=trade.id) }}" method="post" style="display:inline-block;">
+                            <button type="submit" class="btn btn-success btn-sm">Accept</button>
+                        </form>
+                        <form action="{{ url_for('reject_trade', trade_id=trade.id) }}" method="post" style="display:inline-block; margin-left: 8px;">
+                            <button type="submit" class="btn btn-danger btn-sm">Reject</button>
+                        </form>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="alert alert-secondary">No swap requests received.</div>
+            {% endif %}
+
+            <hr>
+            <h4 class="mb-3">Purchase History</h4>
+            {% if user.purchase_history %}
+            <ul class="list-group mb-3">
+                {% for entry in user.purchase_history %}
+                <li class="list-group-item">
+                    Bought <strong>{{ entry.get('name', entry.get('title', '')) }}</strong> for <strong>{{ entry.get('price', '') }} Coins</strong><br>
+                    Contact: <a href="https://wa.me/{{ entry.get('phone', entry.get('zap', '')) }}" target="_blank">{{ entry.get('phone', entry.get('zap', '')) }}</a><br>
+                    {{ entry.get('description', '') }}<br>
+                    on {{ entry.get('date', '')[:19].replace('T', ' ') }}
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <div class="alert alert-secondary">No purchases recorded.</div>
+            {% endif %}
+
+            <hr>
+            <h4 class="mb-3">Sales History</h4>
+            {% if user.sales_history %}
+            <ul class="list-group">
+                {% for entry in user.sales_history %}
+                <li class="list-group-item">
+                    Sold <strong>{{ entry.get('title', '') }}</strong> for <strong>{{ entry.get('price', '') }} Coins</strong><br>
+                    to <strong>{{ entry.get('buyer', '') }}</strong><br>
+                    on {{ entry.get('date', '')[:19].replace('T', ' ') }}
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <div class="alert alert-secondary">No sales recorded.</div>
+            {% endif %}
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Publish Modal with Wizard -->
+<div class="modal fade" id="publishModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Publish Your Item</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="wizard-progress mb-4">
+                    <div class="progress">
+                        <div class="progress-bar" id="wizardProgress" role="progressbar" style="width: 20%"></div>
+                    </div>
+                    <p class="text-center mt-2"><small id="stepCounter">Step 1 of 5</small></p>
+                </div>
+
+                <form id="publishForm" action="{{ url_for('add_item') }}" method="post">
+                    <!-- Step 1: Title -->
+                    <div class="wizard-step active" id="step1">
+                        <h5>What is the name of your item?</h5>
+                        <div class="form-group mt-4">
+                            <input type="text" id="title" name="title" class="form-control form-control-lg" placeholder="e.g., iPhone 13, Vintage Bike, Headphones" required>
+                        </div>
+                        <p class="text-muted mt-4"><small>Give your item a clear, attractive title</small></p>
+                    </div>
+
+                    <!-- Step 2: Description -->
+                    <div class="wizard-step" id="step2">
+                        <h5>Describe your item</h5>
+                        <div class="form-group mt-4">
+                            <textarea id="description" name="description" class="form-control" rows="4" placeholder="Condition, features, why you're selling it, etc." required></textarea>
+                        </div>
+                        <p class="text-muted mt-4"><small>Help buyers understand what you're selling</small></p>
+                    </div>
+
+                    <!-- Step 3: Price -->
+                    <div class="wizard-step" id="step3">
+                        <h5>What's the price?</h5>
+                        <div class="form-group mt-4">
+                            <div class="input-group input-group-lg">
+                                <input type="number" id="price" name="price" class="form-control" min="1" placeholder="Amount in Coins" required>
+                                <div class="input-group-append">
+                                    <span class="input-group-text">💰 Coins</span>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="text-muted mt-4"><small>Set a fair price for your item</small></p>
+                    </div>
+
+                    <!-- Step 4: Photo URL -->
+                    <div class="wizard-step" id="step4">
+                        <h5>Add a photo link (Google Images)</h5>
+                        <div class="form-group mt-4">
+                            <input type="url" id="photo_url" name="photo_url" class="form-control form-control-lg" placeholder="https://example.com/image.jpg" required>
+                            <small class="form-text text-muted mt-2">You can find image links by:<br>1. Right-click on a photo in Google Images<br>2. Select "Copy image link"<br>3. Paste it here</small>
+                        </div>
+                        <div id="photoPreview" class="mt-3">
+                            <img id="previewImage" src="" alt="Preview" style="max-width: 100%; max-height: 300px; display: none;">
+                        </div>
+                    </div>
+
+                    <!-- Step 5: Phone Number -->
+                    <div class="wizard-step" id="step5">
+                        <h5>Enter your phone number</h5>
+                        <div class="form-group mt-4">
+                            <input type="tel" id="phone" name="phone" class="form-control form-control-lg" placeholder="5511999999999" required>
+                            <small class="form-text text-muted mt-2">We'll use this phone number to associate the listing with your account.</small>
+                        </div>
+                    </div>
+
+                    <!-- Navigation Buttons -->
+                    <div class="mt-5 d-flex justify-content-between">
+                        <button type="button" class="btn btn-secondary" id="prevBtn" style="display: none;" onclick="changeStep(-1)">← Previous</button>
+                        <button type="button" class="btn btn-primary" id="nextBtn" onclick="changeStep(1)">Next →</button>
+                        <button type="submit" class="btn btn-success" id="submitBtn" style="display: none;">✓ Publish Item</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+let currentStep = 1;
+const totalSteps = 5;
+
+function showStep(step) {
+    // Hide all steps
+    for (let i = 1; i <= totalSteps; i++) {
+        document.getElementById(`step${i}`).classList.remove('active');
+    }
+    // Show current step
+    document.getElementById(`step${step}`).classList.add('active');
+    
+    // Update progress bar
+    const progress = (step / totalSteps) * 100;
+    document.getElementById('wizardProgress').style.width = progress + '%';
+    document.getElementById('stepCounter').innerText = `Step ${step} of ${totalSteps}`;
+    
+    // Show/hide buttons
+    document.getElementById('prevBtn').style.display = step > 1 ? 'block' : 'none';
+    document.getElementById('nextBtn').style.display = step < totalSteps ? 'block' : 'none';
+    document.getElementById('submitBtn').style.display = step === totalSteps ? 'block' : 'none';
+}
+
+function changeStep(direction) {
+    const newStep = currentStep + direction;
+    
+    // Validate current step before moving forward
+    if (direction > 0) {
+        if (!validateStep(currentStep)) {
+            alert('Please fill in all required fields');
+            return;
+        }
+    }
+    
+    if (newStep > 0 && newStep <= totalSteps) {
+        currentStep = newStep;
+        showStep(currentStep);
+    }
+}
+
+function validateStep(step) {
+    switch(step) {
+        case 1:
+            return document.getElementById('title').value.trim() !== '';
+        case 2:
+            return document.getElementById('description').value.trim() !== '';
+        case 3:
+            return parseInt(document.getElementById('price').value) > 0;
+        case 4:
+            return document.getElementById('photo_url').value.trim() !== '';
+        case 5:
+            return document.getElementById('phone').value.trim() !== '';
+        default:
+            return true;
+    }
+}
+
+// Photo URL preview
+document.getElementById('photo_url').addEventListener('change', function() {
+    const url = this.value.trim();
+    if (url) {
+        const img = document.getElementById('previewImage');
+        img.src = url;
+        img.style.display = 'block';
+        img.onerror = function() {
+            this.style.display = 'none';
+            console.log('Could not load image');
+        };
+    }
+});
+
+// Initialize
+showStep(1);
+
+const publishForm = document.getElementById('publishForm');
+if (publishForm) {
+    publishForm.addEventListener('submit', function(event) {
+        const confirmed = window.confirm('Tem certeza que deseja publicar este anúncio?');
+        if (!confirmed) {
+            event.preventDefault();
+        }
+    });
+}
+</script>
+</body>
+</html>
